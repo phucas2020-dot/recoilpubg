@@ -8,10 +8,10 @@ import winreg
 import math
 
 class RecoilControl:
-    # === BÙ VIÊN ĐẦU ===
-    FIRST_BULLET_TIME   = 0.06   # 60ms đầu
-    FIRST_BULLET_FACTOR = 2.2    # Hệ số bù viên đầu
-    # ====================
+    # === FIRST BULLET COMPENSATION ===
+    FIRST_BULLET_TIME   = 0.06   # first 60ms
+    FIRST_BULLET_FACTOR = 2.2    # first bullet factor
+    # =================================
 
     def __init__(self):
         self.root = tk.Tk()
@@ -19,7 +19,7 @@ class RecoilControl:
         self.root.geometry("420x560")
         self.root.resizable(False, False)
 
-        # Thông số tối ưu cho sen 25, dọc 1.0, DPI 1600
+        # Optimal settings for sensitivity 25, vertical 1.0, DPI 1600
         self.strength   = self.load_setting("Strength",   3.5)
         self.multiplier = self.load_setting("Multiplier", 1.5)
         self.rate       = self.load_setting("Rate",       8.0)
@@ -51,10 +51,10 @@ class RecoilControl:
                  font=("Arial", 14, "bold")).pack(pady=5)
 
         for label, attr, from_, to, res, save_key, lbl_fmt in [
-            ("Lực bù gốc:",   "strength",   0.0,  10.0, 0.1, "Strength",   "{:.1f}"),
-            ("Hệ số nhân:",   "multiplier", 1.0,  10.0, 0.1, "Multiplier", "{:.1f}x"),
-            ("Tốc độ tăng:",  "rate",       1.0,  20.0, 0.5, "Rate",       "{:.1f}"),
-            ("Ổn định tại:",  "t_cap",      0.2,   3.0, 0.1, "TCap",       "{:.1f}s"),
+            ("Base strength:",  "strength",   0.0,  10.0, 0.1, "Strength",   "{:.1f}"),
+            ("Multiplier:",     "multiplier", 1.0,  10.0, 0.1, "Multiplier", "{:.1f}x"),
+            ("Ramp speed:",     "rate",       1.0,  20.0, 0.5, "Rate",       "{:.1f}"),
+            ("Stabilize at:",   "t_cap",      0.2,   3.0, 0.1, "TCap",       "{:.1f}s"),
         ]:
             frame = tk.Frame(self.root)
             frame.pack(pady=2)
@@ -76,23 +76,23 @@ class RecoilControl:
             setattr(self, f"slider_{attr}", sl)
             setattr(self, f"lbl_{attr}",   lbl_var)
 
-        self.status = tk.Label(self.root, text="⏹ ĐANG CHỜ",
+        self.status = tk.Label(self.root, text="⏹ IDLE",
                                font=("Arial", 12, "bold"), fg="orange")
         self.status.pack(pady=4)
-        self.info = tk.Label(self.root, text="Lực kéo: 0 | Thời gian: 0.00s",
+        self.info = tk.Label(self.root, text="Pull: 0 | Time: 0.00s",
                              font=("Arial", 10), fg="blue")
         self.info.pack(pady=2)
 
-        tk.Label(self.root, text="Đường cong lực bù:", font=("Arial", 9)).pack()
+        tk.Label(self.root, text="Recoil curve:", font=("Arial", 9)).pack()
         self.canvas = tk.Canvas(self.root, width=380, height=80, bg="#111111")
         self.canvas.pack(pady=4)
         self._draw_curve()
 
-        tk.Label(self.root, text="🖱 GIỮ nút FORWARD + chuột trái").pack()
+        tk.Label(self.root, text="🖱 HOLD FORWARD button + left click").pack()
         tk.Label(self.root,
-                 text="⌨️  +/-  lực  |  * /  hệ số  |  ↑↓  tốc độ  |  PgUp/PgDn  ổn định",
+                 text="⌨️  +/-  strength  |  * /  multiplier  |  ↑↓  ramp  |  PgUp/PgDn  stabilize",
                  font=("Arial", 8)).pack()
-        tk.Button(self.root, text="Thoát", command=self.exit,
+        tk.Button(self.root, text="Exit", command=self.exit,
                   bg="#f44336", fg="white", width=12).pack(pady=6)
 
         self.root.bind('<Key-plus>',       lambda e: self._adj("strength",    0.1, "Strength"))
@@ -124,7 +124,7 @@ class RecoilControl:
 
         cap_x = pad + (W - 2*pad) * min(self.t_cap + self.FIRST_BULLET_TIME, max_t) / max_t
         c.create_line(cap_x, pad, cap_x, H - pad, fill="#4488ff", dash=(3, 3))
-        c.create_text(cap_x + 2, pad + 2, text=f"ổn định {self.t_cap:.1f}s",
+        c.create_text(cap_x + 2, pad + 2, text=f"stabilize {self.t_cap:.1f}s",
                       fill="#4488ff", anchor="nw", font=("Arial", 7))
 
         c.create_text(W - pad, pad, text=f"max {max_pull}px",
@@ -181,8 +181,8 @@ class RecoilControl:
 
                 if now - self._last_ui_update >= self._ui_update_interval:
                     self._last_ui_update = now
-                    status_txt = "▶ ĐANG GHÌM"
-                    info_txt   = f"Lực kéo: {pull} | Thời gian: {elapsed:.2f}s"
+                    status_txt = "▶ PULLING"
+                    info_txt   = f"Pull: {pull} | Time: {elapsed:.2f}s"
                     if status_txt != self._last_status:
                         self._last_status = status_txt
                         self.root.after(0, lambda t=status_txt: self.status.config(text=t, fg="green"))
@@ -193,14 +193,14 @@ class RecoilControl:
                 self.fire_start_time = 0.0
                 if now - self._last_ui_update >= self._ui_update_interval:
                     self._last_ui_update = now
-                    s = "⏸ GIỮ FORWARD + CLICK TRÁI" if fwd else "⏹ ĐANG CHỜ"
+                    s = "⏸ HOLD FORWARD + LEFT CLICK" if fwd else "⏹ IDLE"
                     if s != self._last_status:
                         self._last_status = s
                         self.root.after(0, lambda t=s: self.status.config(text=t, fg="orange"))
-                    if self._last_info != "Lực kéo: 0 | Thời gian: 0.00s":
-                        self._last_info = "Lực kéo: 0 | Thời gian: 0.00s"
+                    if self._last_info != "Pull: 0 | Time: 0.00s":
+                        self._last_info = "Pull: 0 | Time: 0.00s"
                         self.root.after(0, lambda: self.info.config(
-                            text="Lực kéo: 0 | Thời gian: 0.00s"))
+                            text="Pull: 0 | Time: 0.00s"))
 
             target = now + 0.001
             time.sleep(max(0, target - t() - 0.0002))
@@ -218,17 +218,17 @@ class RecoilControl:
 if __name__ == "__main__":
     try:
         if not ctypes.windll.shell32.IsUserAnAdmin():
-            print("⚠️ Cần chạy với quyền Administrator!")
-            input("Nhấn Enter để thoát..."); exit()
+            print("⚠️ Administrator privileges required!")
+            input("Press Enter to exit..."); exit()
     except:
-        print("⚠️ Lỗi kiểm tra admin."); input(); exit()
+        print("⚠️ Admin check failed."); input(); exit()
 
     try:
         import win32api, win32con
     except ImportError:
         import subprocess, sys
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pywin32"])
-        print("Đã cài pywin32, chạy lại."); input(); exit()
+        print("pywin32 installed, please run again."); input(); exit()
 
     app = RecoilControl()
     app.root.mainloop()
